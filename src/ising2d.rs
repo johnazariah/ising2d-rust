@@ -8,7 +8,7 @@ struct Ising2DContext<const L: usize> {
 impl<const L: usize> fmt::Debug for Ising2DContext<L> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
-        let mut result = String::from("&Ising2DContext : \n{\n");
+        let mut result = String::from("Ising2DContext : \n{\n");
         for y in 0..L {
             for x in 0..L {
                 result.push_str(&(format!("\t({}, {}) -> [ ", x, y)));
@@ -25,7 +25,7 @@ impl<const L: usize> fmt::Debug for Ising2DContext<L> {
     }
 }
 
-fn initialize_context<const L: usize>() -> &'static Ising2DContext<L> {
+fn initialize_context<const L: usize>() -> Ising2DContext<L> {
     let mut _adj = [[[(8888, 8888); 4]; L]; L];
     for (x, y) in itertools::iproduct!(0..L, 0..L) {
         _adj[x][y][0] = (((x + 1) % L), (y));
@@ -34,7 +34,7 @@ fn initialize_context<const L: usize>() -> &'static Ising2DContext<L> {
         _adj[x][y][3] = ((x), ((y + L - 1) % L));
     }
 
-    return &Ising2DContext {
+    return Ising2DContext {
         adj : _adj
     };
 }
@@ -47,7 +47,7 @@ struct Ising2D<const L: usize> {
 impl<const L: usize> fmt::Debug for Ising2D<L> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
-        let mut result = String::from("&Ising2D : \n{\n");
+        let mut result = String::from("Ising2D : \n{\n");
         result.push_str("spins : \n\t{\n");
         for y in 0..L {
             result.push_str("\t\t[ ");
@@ -90,7 +90,7 @@ fn compute_hamiltonian<const L: usize, const J : i8>(context : &Ising2DContext<L
     return -e;
 }
 
-fn initialize_lattice<const L: usize>(context : &Ising2DContext<L>) -> &'static Ising2D<L> {
+fn initialize_lattice<const L: usize>(context : &Ising2DContext<L>) -> Ising2D<L> {
     let mut spins = [[false; L]; L];
 
     for (x, y) in itertools::iproduct!(0..L, 0..L) {
@@ -98,10 +98,10 @@ fn initialize_lattice<const L: usize>(context : &Ising2DContext<L>) -> &'static 
     }
     let ham = compute_hamiltonian::<L,1>(context, &spins);
 
-    return &Ising2D { spins, ham };
+    return Ising2D { spins, ham };
 }
 
-fn evolveMC<'a, const L: usize, const J : i8>(context : &Ising2DContext<L>, lattice : &'static Ising2D<L>, T : f64, cell: (usize, usize)) -> &'static Ising2D<L> {
+fn evolveMC<'a, const L: usize, const J : i8>(context : &Ising2DContext<L>, lattice : &mut Ising2D<L>, T : f64, cell: (usize, usize)) {
     let accept = | dE | {
         return if dE <= 0 { 
             true
@@ -121,27 +121,22 @@ fn evolveMC<'a, const L: usize, const J : i8>(context : &Ising2DContext<L>, latt
         let (x, y) = cell;
         lattice.spins[x][y] = !lattice.spins[x][y];
     }
-
-    return lattice;
 }
 
-pub fn solveMC<const L: usize>(num_iterations : i16, T : f64) {
-    println!("Solving &Ising2D {side} x {side} ({num_iterations} iterations)", side=L, num_iterations=num_iterations);
+pub fn solve_mc<const L: usize>(num_iterations : i64, T : f64) {
+    println!("Solving Ising2D {side} x {side} ({num_iterations} iterations)", side=L, num_iterations=num_iterations);
     let context = initialize_context::<L>();
-    let mut lattice = initialize_lattice(context);
+    let mut lattice = initialize_lattice(&context);
 
     let mut rng = rand::thread_rng();
 
-    let evolved = 
-        (0..num_iterations)
-            .fold(lattice, |_lattice, _| {
-                let x = rng.gen_range(0..L);
-                let y = rng.gen_range(0..L);
-                return evolveMC::<L, 1>(context, _lattice, T, (x, y));
-            });
-
+    println!("Before: {:?}", lattice);
+    for _ in 0..num_iterations {
+        let x = rng.gen_range(0..L);
+        let y = rng.gen_range(0..L);
+        evolveMC::<L, 1>(&context, &mut lattice, T, (x, y));
+    }
 
     //println!("{:?}", context);
-    println!("Before: {:?}", lattice);
-    println!("After: {:?}", evolved);
+    println!("After: {:?}", lattice);
 }
