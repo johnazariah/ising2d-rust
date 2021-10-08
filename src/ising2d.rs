@@ -72,7 +72,7 @@ impl<const L: usize> fmt::Debug for Ising2D<L> {
 
 fn interaction_energy<const L: usize>(context : &mut Ising2DContext<L>, spins : &[[bool; L]; L], (x, y) : (usize, usize), flip_spin : bool) -> f64 {
     let spin_energy = | s1 : bool, s2 : bool | {
-        return if s1 == s2 { -1.0 } else { 1.0 };
+        return if s1 == s2 { 1.0 } else { -1.0 };
     };
     
     let s1 = if flip_spin { !spins[x][y] } else { spins[x][y] };
@@ -81,7 +81,7 @@ fn interaction_energy<const L: usize>(context : &mut Ising2DContext<L>, spins : 
     for n in 0..3 {
         let (nx, ny) = context.adj[x][y][n];
         let s2 = spins[nx][ny];
-        h = h + spin_energy(s1, s2);
+        h = h - spin_energy(s1, s2);
     }
     return h;
 }
@@ -93,10 +93,8 @@ fn initialize_lattice<const L: usize>(context : &mut Ising2DContext<L>) -> Ising
         spins[x][y] = context.rand_rng.gen();
     }
 
-    let e = itertools::iproduct!(0..L, 0..L)
+    let ham = itertools::iproduct!(0..L, 0..L)
         .fold(0.0, | _h, _cell | {return _h + interaction_energy::<L>(context, &spins, _cell, false); });
-
-    let ham = -e;
 
     return Ising2D { spins, ham };
 }
@@ -104,42 +102,39 @@ fn initialize_lattice<const L: usize>(context : &mut Ising2DContext<L>) -> Ising
 pub fn solve_mc<const L: usize>(num_iterations : i64, temp : f64) {
     let mut context = initialize_context::<L>();
     let mut lattice = initialize_lattice(&mut context);
-    let mut histo = [0;L];
+    let mut flips = 0;
 
-    let evolve = | context: &mut Ising2DContext<L>, lattice: &mut Ising2D<L>, cell: (usize, usize) | {
+    let evolve = | context: &mut Ising2DContext<L>, lattice: &mut Ising2D<L>, f: &mut i64, cell: (usize, usize) | {
         let before = interaction_energy::<L>(context, &lattice.spins, cell, false);
         let after  = interaction_energy::<L>(context, &lattice.spins, cell, true);
-        let dE = after - before;
+        let d_e = after - before;
         let accept = 
-            if dE <= 0.0 { 
+            if d_e <= 0.0 { 
                 true
             } else {
-                let probability = (-dE/temp).exp();
+                *f += 1;
+                let probability = (-d_e/temp).exp();
                 let random = context.rand_rng.gen::<f64>();
                 probability >= random
             };
 
         if accept {
-            lattice.ham = lattice.ham + dE;
+            lattice.ham = lattice.ham + d_e;
             let (x, y) = cell;
             lattice.spins[x][y] = !lattice.spins[x][y];
         }
     };
     
     let start = std::time::Instant::now();
-    println!("Before: {:?} {:?}", lattice, start);
+    println!("Before: {:?}", lattice);
     for _ in 0..num_iterations {
         let x = context.range.sample(&mut context.rand_rng);
         let y = context.range.sample(&mut context.rand_rng);
-        histo[x] += 1;
-        histo[y] += 1;         
-        evolve(&mut context, &mut lattice, (x, y));
+        evolve(&mut context, &mut lattice, &mut flips, (x, y));
     }
-
-    println!("Distribution: {:?}", histo);
-    
     let finish = std::time::Instant::now();
-    println!("After: {:?} {:?}", lattice, finish);
+    println!("After: {:?}", lattice);
+    
     let duration = finish.duration_since(start);
-    println!("Rust - Solving Ising2D {side} x {side} ({num_iterations} iterations) at {temp}K took {duration}ms", side=L, num_iterations=num_iterations, temp=temp, duration=duration.as_millis());
+    println!("Rust - Solving Ising2D {side} x {side} ({num_iterations} iterations) at {temp}K took {duration}ms. {flips} spins were flipped.", side=L, num_iterations=num_iterations, temp=temp, duration=duration.as_millis(), flips=flips);
 }
