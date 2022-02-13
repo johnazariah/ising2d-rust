@@ -1,6 +1,6 @@
 mod ising2d;
 
 fn main() {
-    let c = ising2d::solve_mc::<70>(250_000_000, 1.2);    
+    let c = ising2d::solve_mc::<70>(5_000_000, 0.6);    
     println!("{:?}", c);
 }
